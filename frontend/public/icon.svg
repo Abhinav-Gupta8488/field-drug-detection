@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+  <path d="M256 60 L390 120 L390 260 C390 350 256 440 256 440 C256 440 122 350 122 260 L122 120 Z" fill="none" stroke="url(#shieldGrad)" stroke-width="20" stroke-linejoin="round"/>
+  <!-- Flask Icon inside -->
+  <path d="M230 180 L230 220 L180 320 C170 340 185 360 210 360 L302 360 C327 360 342 340 332 320 L282 220 L282 180 Z" fill="#0891b2" opacity="0.3"/>
+  <path d="M230 170 L282 170 M230 180 L230 220 L180 320 C170 340 185 360 210 360 L302 360 C327 360 342 340 332 320 L282 220 L282 180 Z" fill="none" stroke="#22d3ee" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Checkmark -->
+  <path d="M210 280 L245 315 L305 250" fill="none" stroke="#10b981" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
