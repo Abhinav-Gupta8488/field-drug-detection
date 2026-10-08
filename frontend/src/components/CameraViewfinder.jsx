@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Upload, Flashlight, RefreshCw, Layers, CheckCircle2, AlertCircle, Crosshair, Move, Sliders, RotateCcw } from 'lucide-react';
+import { Camera, Upload, Flashlight, RefreshCw, Layers, CheckCircle2, AlertCircle, Crosshair, Move, Sliders, RotateCcw, Image as ImageIcon } from 'lucide-react';
+import { optimizeImageForUpload } from '../services/imageOptimizer';
 
 export default function CameraViewfinder({
   sampleCases,
@@ -23,14 +24,27 @@ export default function CameraViewfinder({
 
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
+  const nativeCameraInputRef = useRef(null);
   const streamRef = useRef(null);
   const containerRef = useRef(null);
 
   // Default ROI boxes in percentage coordinates (0-100)
-  // Ref Card default: left: 8%, top: 28%, width: 36%, height: 38%
-  // Vial default: left: 58%, top: 22%, width: 30%, height: 52%
   const [refBox, setRefBox] = useState({ x: 8, y: 28, w: 36, h: 38 });
   const [vialBox, setVialBox] = useState({ x: 58, y: 22, w: 30, h: 52 });
+
+  // Attach active stream to video element whenever cameraActive or stream changes
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      const vid = videoRef.current;
+      vid.srcObject = streamRef.current;
+      vid.setAttribute('playsinline', 'true');
+      vid.muted = true;
+      vid.onloadedmetadata = () => {
+        vid.play().catch((err) => console.warn('Video play error:', err));
+      };
+      vid.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   const startCamera = async () => {
     setCameraError(null);
@@ -39,25 +53,38 @@ export default function CameraViewfinder({
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
 
-      const constraints = {
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      };
+      let stream;
+      try {
+        // Try requested facing mode (rear camera for field kits)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 },
+          },
+          audio: false,
+        });
+      } catch (err1) {
+        console.warn('Initial camera constraint failed, retrying with simple video=true:', err1);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
+      setCameraActive(true);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.muted = true;
+        videoRef.current.play().catch((err) => console.warn('Video play error:', err));
       }
-      setCameraActive(true);
     } catch (err) {
       console.warn('Camera access error:', err);
       setCameraError(
-        'Unable to access physical camera. Use file upload or test presets below.'
+        `Live camera unavailable (${err.name || 'Permission Denied'}). Use "Snap Photo" or "Upload" instead.`
       );
       setCameraActive(false);
     }
@@ -95,7 +122,8 @@ export default function CameraViewfinder({
     const nextMode = facingMode === 'environment' ? 'user' : 'environment';
     setFacingMode(nextMode);
     if (cameraActive) {
-      setTimeout(() => startCamera(), 100);
+      stopCamera();
+      setTimeout(() => startCamera(), 150);
     }
   };
 
@@ -119,16 +147,20 @@ export default function CameraViewfinder({
         }
       },
       'image/jpeg',
-      0.95
+      0.92
     );
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
       stopCamera();
-      onImageSelected(file, URL.createObjectURL(file));
+      // Optimize large phone camera photos before upload
+      const optimized = await optimizeImageForUpload(file);
+      onImageSelected(optimized, URL.createObjectURL(optimized));
     }
+    // Reset input value so same photo can be re-selected if needed
+    e.target.value = '';
   };
 
   // Tap-to-reposition ROI center
@@ -193,7 +225,7 @@ export default function CameraViewfinder({
       {/* Viewfinder Header Controls */}
       <div className="bg-slate-950 px-3 py-2 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className={`w-2.5 h-2.5 rounded-full ${cameraActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`} />
           <span className="text-xs font-mono font-semibold tracking-wider text-slate-300 uppercase">
             {cameraActive ? 'OPTICAL SENSOR ACTIVE' : 'FIELD CAPTURE & VIEWFINDER'}
           </span>
@@ -212,7 +244,7 @@ export default function CameraViewfinder({
               title="Toggle Interactive Touch ROI Adjustment"
             >
               <Move className="w-3 h-3 text-amber-400" />
-              <span>{roiEditMode ? 'Editing Target ROI' : 'Adjust Targets'}</span>
+              <span>{roiEditMode ? 'Editing Target' : 'Adjust Target'}</span>
             </button>
           )}
 
@@ -232,7 +264,7 @@ export default function CameraViewfinder({
               <button
                 onClick={switchCameraFacing}
                 className="p-1.5 rounded-md text-xs bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700"
-                title="Switch Camera"
+                title="Switch Camera (Front/Rear)"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
@@ -244,21 +276,45 @@ export default function CameraViewfinder({
               </button>
             </>
           ) : (
-            <button
-              onClick={startCamera}
-              className="px-2.5 py-1 rounded-md text-xs font-medium bg-cyan-700 hover:bg-cyan-600 text-white flex items-center gap-1.5 shadow-sm transition-colors"
-            >
-              <Camera className="w-3.5 h-3.5" />
-              <span>Open Camera</span>
-            </button>
+            <>
+              {/* Native Mobile Camera Snap Button */}
+              <button
+                onClick={() => nativeCameraInputRef.current?.click()}
+                className="px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-700 hover:bg-emerald-600 text-white flex items-center gap-1.5 shadow-sm transition-colors"
+                title="Snap Photo with Phone Camera"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Snap Photo</span>
+              </button>
+              <input
+                type="file"
+                ref={nativeCameraInputRef}
+                onChange={handleFileUpload}
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+              />
+
+              {/* Live Web Camera Viewfinder */}
+              <button
+                onClick={startCamera}
+                className="px-2 py-1 rounded-md text-xs font-medium bg-cyan-700 hover:bg-cyan-600 text-white flex items-center gap-1 shadow-sm transition-colors"
+                title="Open Live Web Cam Stream"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span className="hidden sm:inline">Live Stream</span>
+              </button>
+            </>
           )}
 
+          {/* Upload Button */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors"
+            className="px-2 py-1 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1 transition-colors"
+            title="Upload from Gallery"
           >
             <Upload className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">Upload</span>
+            <span className="hidden sm:inline">Gallery</span>
           </button>
           <input
             type="file"
@@ -278,28 +334,32 @@ export default function CameraViewfinder({
           roiEditMode ? 'cursor-crosshair' : ''
         }`}
       >
-        {cameraActive ? (
-          <video
-            ref={videoRef}
-            playsInline
-            autoPlay
-            muted
-            className="w-full h-full object-cover"
-          />
-        ) : currentImagePreview ? (
-          <img
-            src={currentImagePreview}
-            alt="Field Capture"
-            className="w-full h-full object-contain bg-slate-950 pointer-events-none"
-          />
-        ) : (
-          <div className="text-center p-6 text-slate-500 flex flex-col items-center">
-            <Camera className="w-12 h-12 text-slate-700 mb-2 stroke-[1.5]" />
-            <p className="text-sm text-slate-400 font-medium">No Image Loaded</p>
-            <p className="text-xs text-slate-600 max-w-xs mt-1">
-              Select a pre-loaded field case below or snap/upload a photo of your test kit with reference card.
-            </p>
-          </div>
+        {/* Permanently mounted video element to eliminate black screen initialization issue */}
+        <video
+          ref={videoRef}
+          playsInline
+          autoPlay
+          muted
+          className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
+        />
+
+        {/* Static Image View when camera is closed */}
+        {!cameraActive && (
+          currentImagePreview ? (
+            <img
+              src={currentImagePreview}
+              alt="Field Capture"
+              className="w-full h-full object-contain bg-slate-950 pointer-events-none"
+            />
+          ) : (
+            <div className="text-center p-6 text-slate-500 flex flex-col items-center">
+              <Camera className="w-12 h-12 text-slate-700 mb-2 stroke-[1.5]" />
+              <p className="text-sm text-slate-400 font-medium">No Image Loaded</p>
+              <p className="text-xs text-slate-600 max-w-xs mt-1">
+                Tap <b>"Snap Photo"</b> on mobile, open <b>"Live Stream"</b>, or pick a test preset below.
+              </p>
+            </div>
+          )
         )}
 
         {/* Augmented Reality Alignment HUD Overlay */}
@@ -387,7 +447,7 @@ export default function CameraViewfinder({
           </div>
         )}
 
-        {/* Shutter Button when live camera is running */}
+        {/* Shutter Button when live camera stream is running */}
         {cameraActive && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
             <button

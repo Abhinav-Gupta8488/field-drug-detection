@@ -24,15 +24,24 @@ export default function TamperVerifierModal({
 
       const res = await fetch('/api/verify', {
         method: 'POST',
+        headers: {
+          'Bypass-Tunnel-Reminder': 'true',
+        },
         body: formData,
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Verification request failed');
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 100)}`);
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Verification request failed');
+      }
+
       setVerificationResult(data);
     } catch (e) {
       setVerificationResult({

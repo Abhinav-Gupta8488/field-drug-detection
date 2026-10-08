@@ -55,7 +55,9 @@ export default function App() {
   // Load sample cases and locker count on startup
   useEffect(() => {
     refreshLockerCount();
-    fetch('/api/sample-cases')
+    fetch('/api/sample-cases', {
+      headers: { 'Bypass-Tunnel-Reminder': 'true' },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.cases) {
@@ -132,15 +134,29 @@ export default function App() {
 
       const res = await fetch('/api/analyze', {
         method: 'POST',
+        headers: {
+          'Bypass-Tunnel-Reminder': 'true',
+        },
         body: formData,
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || 'Analysis request failed');
+      const responseText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        if (responseText.includes('<!DOCTYPE') || responseText.includes('localtunnel')) {
+          throw new Error(
+            'Localtunnel splash page detected. Open the tunnel URL directly in your browser and click "Click to Continue", or switch to ngrok.'
+          );
+        }
+        throw new Error(`Server returned non-JSON response (${res.status}): ${responseText.slice(0, 100)}`);
       }
 
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Analysis request failed');
+      }
+
       setAnalysisResult(data);
       setVerifierManifest(data.manifest);
 
@@ -168,7 +184,9 @@ export default function App() {
 
     try {
       setAnalyzing(true);
-      const imgRes = await fetch(`/api/sample-image/${sampleCase.id}`);
+      const imgRes = await fetch(`/api/sample-image/${sampleCase.id}`, {
+        headers: { 'Bypass-Tunnel-Reminder': 'true' },
+      });
       const blob = await imgRes.blob();
       const file = new File([blob], sampleCase.id, { type: 'image/jpeg' });
       const previewUrl = URL.createObjectURL(blob);
