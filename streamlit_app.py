@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "back
 
 from color_correction import run_full_color_calibration
 from reagent_classifier import extract_hsv_features, classify_drug_reaction, REAGENT_PROFILES
-from tamper_evidence import generate_tamper_evident_record, verify_tamper_evident_record, sanitize_for_json
+from tamper_evidence import generate_tamper_evident_record, verify_tamper_evident_record
 import generate_samples
 
 
@@ -31,30 +31,29 @@ st.set_page_config(
 # Custom Tactical Forensic CSS
 st.markdown("""
 <style>
-    .main {
+    .stApp {
         background-color: #020617;
         color: #f8fafc;
     }
     .stMetric {
         background-color: #0f172a;
-        padding: 10px;
+        padding: 12px;
         border-radius: 8px;
         border: 1px solid #1e293b;
-    }
-    .forensic-badge {
-        padding: 4px 8px;
-        border-radius: 6px;
-        font-family: monospace;
-        font-size: 12px;
-        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
 SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "backend", "sample_data")
-if not os.path.exists(os.path.join(SAMPLE_DIR, "case_01_marquis_mdma.jpg")):
-    generate_samples.generate_all_sample_cases()
+
+@st.cache_data(show_spinner=False)
+def ensure_samples_exist():
+    if not os.path.exists(os.path.join(SAMPLE_DIR, "case_01_marquis_mdma.jpg")):
+        generate_samples.generate_all_sample_cases()
+    return True
+
+ensure_samples_exist()
 
 
 # Sidebar: Telemetry & Kit Configuration
@@ -65,6 +64,7 @@ reagent_options = list(REAGENT_PROFILES.keys())
 selected_reagent = st.sidebar.selectbox(
     "🧪 Select Reagent Kit",
     reagent_options,
+    index=0,
     format_func=lambda r: f"{REAGENT_PROFILES[r]['name']}"
 )
 st.sidebar.info(REAGENT_PROFILES[selected_reagent]["description"])
@@ -90,10 +90,11 @@ Captures test kit photo with **standardized reference color card**, applies **Op
 classifies reaction chromophore in **HSV color space**, and seals **SHA-256 tamper-evident chain of custody**.
 """)
 
-# Input Source Selector
+# Input Source Selector (Defaulting to Verified Preset so app loads instantly in 0.1s)
 input_source = st.radio(
     "Select Image Input Mode:",
-    ["📷 Phone Camera Input", "📂 Upload Image File", "🧪 Load Realistic Field Preset"],
+    ["🧪 Load Verified Field Preset (Instant Demo)", "📷 Mobile Camera Capture", "📂 Upload Photo File"],
+    index=0,
     horizontal=True
 )
 
@@ -101,46 +102,42 @@ raw_image_bytes = None
 ref_roi_override = None
 vial_roi_override = None
 
-if input_source == "📷 Phone Camera Input":
-    cam_file = st.camera_input("Take a photo of the test kit with reference card:")
-    if cam_file:
-        raw_image_bytes = cam_file.getvalue()
+preset_files = {
+    "Case 1: Marquis with MDMA (Warm Tungsten ~3000K Lighting)": ("case_01_marquis_mdma.jpg", "MARQUIS", [60, 150, 220, 140], [400, 185, 120, 135]),
+    "Case 2: Scott with Cocaine HCl (Outdoor Cool Shade)": ("case_02_scott_cocaine.jpg", "SCOTT", [60, 150, 220, 140], [400, 185, 120, 135]),
+    "Case 3: Ehrlich with LSD Blotter (Commercial Fluorescent)": ("case_03_ehrlich_lsd.jpg", "EHRLICH", [60, 150, 220, 140], [400, 185, 120, 135]),
+    "Case 4: Marquis with Methamphetamine (Night Sodium Lamp)": ("case_04_marquis_meth.jpg", "MARQUIS", [60, 150, 220, 140], [400, 185, 120, 135]),
+    "Case 5: Mecke with Heroin (Standard Daylight D65)": ("case_05_mecke_heroin.jpg", "MECKE", [60, 150, 220, 140], [400, 185, 120, 135]),
+    "Case 6: Negative Control / Sugar (Ambient Office Light)": ("case_06_marquis_sugar.jpg", "MARQUIS", [60, 150, 220, 140], [400, 185, 120, 135]),
+}
 
-elif input_source == "📂 Upload Image File":
-    uploaded_file = st.file_uploader("Upload kit photo from gallery (JPEG/PNG):", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        raw_image_bytes = uploaded_file.getvalue()
-
-else:
+if input_source == "🧪 Load Verified Field Preset (Instant Demo)":
     preset_choice = st.selectbox(
-        "Select Verified Field Case:",
-        [
-            "Case 1: Marquis with MDMA (Warm Tungsten ~3000K Lighting)",
-            "Case 2: Scott with Cocaine HCl (Outdoor Overcast / Cool Shade)",
-            "Case 3: Ehrlich with LSD Blotter (Commercial Fluorescent)",
-            "Case 4: Marquis with Methamphetamine (Night Sodium Lamp)",
-            "Case 5: Mecke with Heroin (Standard Daylight D65)",
-            "Case 6: Negative Control / Sugar (Ambient Office Light)",
-        ]
+        "Choose Field Sample Scenario:",
+        list(preset_files.keys()),
+        index=0
     )
-    
-    preset_files = {
-        "Case 1": ("case_01_marquis_mdma.jpg", "MARQUIS", [60, 150, 220, 140], [400, 185, 120, 135]),
-        "Case 2": ("case_02_scott_cocaine.jpg", "SCOTT", [60, 150, 220, 140], [400, 185, 120, 135]),
-        "Case 3": ("case_03_ehrlich_lsd.jpg", "EHRLICH", [60, 150, 220, 140], [400, 185, 120, 135]),
-        "Case 4": ("case_04_marquis_meth.jpg", "MARQUIS", [60, 150, 220, 140], [400, 185, 120, 135]),
-        "Case 5": ("case_05_mecke_heroin.jpg", "MECKE", [60, 150, 220, 140], [400, 185, 120, 135]),
-        "Case 6": ("case_06_marquis_sugar.jpg", "MARQUIS", [60, 150, 220, 140], [400, 185, 120, 135]),
-    }
-    
-    key = preset_choice.split(":")[0]
-    filename, preset_reagent, ref_roi_override, vial_roi_override = preset_files[key]
-    
+    filename, preset_reagent, ref_roi_override, vial_roi_override = preset_files[preset_choice]
     preset_path = os.path.join(SAMPLE_DIR, filename)
     if os.path.exists(preset_path):
         with open(preset_path, "rb") as f:
             raw_image_bytes = f.read()
         selected_reagent = preset_reagent
+
+elif input_source == "📷 Mobile Camera Capture":
+    st.info("Tap below to activate device camera and snap a photo of the kit:")
+    cam_file = st.camera_input("Field Kit Viewfinder:")
+    if cam_file:
+        raw_image_bytes = cam_file.getvalue()
+    else:
+        st.warning("Awaiting camera snapshot. Snap a photo above to run analysis.")
+
+elif input_source == "📂 Upload Photo File":
+    uploaded_file = st.file_uploader("Upload kit photo from device (JPEG/PNG):", type=["jpg", "jpeg", "png"])
+    if uploaded_file:
+        raw_image_bytes = uploaded_file.getvalue()
+    else:
+        st.warning("Upload an image above to analyze.")
 
 
 # Process Pipeline if image loaded
