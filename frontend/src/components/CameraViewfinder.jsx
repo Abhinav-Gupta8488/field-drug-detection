@@ -364,7 +364,7 @@ export default function CameraViewfinder({
 
         {/* Augmented Reality Alignment HUD Overlay */}
         {(cameraActive || currentImagePreview) && (
-          <div className="absolute inset-0 pointer-events-none p-2 sm:p-4 flex flex-col justify-between">
+          <div className="absolute inset-0 pointer-events-none flex flex-col justify-between">
             <div className="relative w-full h-full pointer-events-auto">
               {/* Reference Card Target Box (Yellow) */}
               <div
@@ -372,10 +372,10 @@ export default function CameraViewfinder({
                   e.stopPropagation();
                   setActiveTarget('card');
                 }}
-                className={`absolute border-2 border-dashed rounded-md backdrop-blur-[1px] transition-all flex flex-col justify-between p-1.5 shadow-lg ${
+                className={`absolute border-[2.5px] border-dashed rounded-md transition-all flex flex-col justify-between p-1.5 shadow-[0_0_15px_rgba(251,191,36,0.35)] ${
                   activeTarget === 'card' && roiEditMode
-                    ? 'border-amber-300 ring-2 ring-amber-400 bg-amber-500/20'
-                    : 'border-amber-400/90 bg-amber-500/10'
+                    ? 'border-amber-300 ring-2 ring-amber-400 bg-amber-500/25'
+                    : 'border-amber-400 bg-amber-500/15'
                 }`}
                 style={{
                   left: `${refBox.x}%`,
@@ -386,10 +386,10 @@ export default function CameraViewfinder({
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] sm:text-[10px] font-mono font-bold text-amber-300 bg-black/75 px-1 py-0.5 rounded border border-amber-500/50">
-                    REF COLOR CARD
+                  <span className="text-[9px] sm:text-[10px] font-mono font-bold text-amber-300 bg-black/85 px-1.5 py-0.5 rounded border border-amber-400 shadow-sm">
+                    🟨 REF COLOR CARD
                   </span>
-                  <div className="w-2 h-2 rounded-full bg-amber-400" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-300/50" />
                 </div>
                 {roiEditMode && activeTarget === 'card' && (
                   <div className="text-center text-[9px] font-mono text-amber-200 bg-black/80 py-0.5 rounded animate-pulse">
@@ -404,10 +404,10 @@ export default function CameraViewfinder({
                   e.stopPropagation();
                   setActiveTarget('vial');
                 }}
-                className={`absolute border-2 border-dashed rounded-md backdrop-blur-[1px] transition-all flex flex-col justify-between p-1.5 shadow-lg ${
+                className={`absolute border-[2.5px] border-dashed rounded-md transition-all flex flex-col justify-between p-1.5 shadow-[0_0_15px_rgba(52,211,153,0.35)] ${
                   activeTarget === 'vial' && roiEditMode
-                    ? 'border-emerald-300 ring-2 ring-emerald-400 bg-emerald-500/20'
-                    : 'border-emerald-400/90 bg-emerald-500/10'
+                    ? 'border-emerald-300 ring-2 ring-emerald-400 bg-emerald-500/25'
+                    : 'border-emerald-400 bg-emerald-500/15'
                 }`}
                 style={{
                   left: `${vialBox.x}%`,
@@ -418,10 +418,10 @@ export default function CameraViewfinder({
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] sm:text-[10px] font-mono font-bold text-emerald-300 bg-black/75 px-1 py-0.5 rounded border border-emerald-500/50">
-                    TEST VIAL / WELL
+                  <span className="text-[9px] sm:text-[10px] font-mono font-bold text-emerald-300 bg-black/85 px-1.5 py-0.5 rounded border border-emerald-400 shadow-sm">
+                    🟩 TEST VIAL / WELL
                   </span>
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-300/50" />
                 </div>
                 {roiEditMode && activeTarget === 'vial' && (
                   <div className="text-center text-[9px] font-mono text-emerald-200 bg-black/80 py-0.5 rounded animate-pulse">
@@ -437,7 +437,7 @@ export default function CameraViewfinder({
             </div>
 
             {/* Viewfinder Bottom Status Line */}
-            <div className="flex items-center justify-between text-[10px] font-mono text-white/90 bg-slate-950/70 backdrop-blur-md px-2.5 py-1 rounded border border-white/10 pointer-events-none">
+            <div className="flex items-center justify-between text-[10px] font-mono text-white/90 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 mx-2 mb-2 rounded border border-white/10 pointer-events-none">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                 OPENCV CALIBRATION READY

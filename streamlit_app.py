@@ -20,6 +20,117 @@ from tamper_evidence import generate_tamper_evident_record, verify_tamper_eviden
 import generate_samples
 
 
+# ==============================================================================
+# Tactical Augmented Reality HUD Drawing Utilities
+# Draws high-visibility Yellow Reference Card and Green Reaction Vial Dashed Boxes
+# ==============================================================================
+
+def draw_dashed_line(img, pt1, pt2, color, thickness=2, dash_len=12, gap_len=8):
+    dist = float(np.hypot(pt2[0] - pt1[0], pt2[1] - pt1[1]))
+    if dist < 1:
+        return
+    dx = (pt2[0] - pt1[0]) / dist
+    dy = (pt2[1] - pt1[1]) / dist
+    curr = 0.0
+    while curr < dist:
+        end = min(curr + dash_len, dist)
+        p1 = (int(round(pt1[0] + dx * curr)), int(round(pt1[1] + dy * curr)))
+        p2 = (int(round(pt1[0] + dx * end)), int(round(pt1[1] + dy * end)))
+        cv2.line(img, p1, p2, color, thickness, cv2.LINE_AA)
+        curr += dash_len + gap_len
+
+def draw_corner_brackets(img, x, y, w, h, color, bracket_len=16, thickness=3):
+    bl = min(bracket_len, max(6, w // 4), max(6, h // 4))
+    # Top-Left
+    cv2.line(img, (x, y), (x + bl, y), color, thickness, cv2.LINE_AA)
+    cv2.line(img, (x, y), (x, y + bl), color, thickness, cv2.LINE_AA)
+    # Top-Right
+    cv2.line(img, (x + w, y), (x + w - bl, y), color, thickness, cv2.LINE_AA)
+    cv2.line(img, (x + w, y), (x + w, y + bl), color, thickness, cv2.LINE_AA)
+    # Bottom-Left
+    cv2.line(img, (x, y + h), (x + bl, y + h), color, thickness, cv2.LINE_AA)
+    cv2.line(img, (x, y + h), (x, y + h - bl), color, thickness, cv2.LINE_AA)
+    # Bottom-Right
+    cv2.line(img, (x + w, y + h), (x + w - bl, y + h), color, thickness, cv2.LINE_AA)
+    cv2.line(img, (x + w, y + h), (x + w, y + h - bl), color, thickness, cv2.LINE_AA)
+
+def draw_tactical_alignment_hud(base_img, ref_roi, vial_roi):
+    annotated = base_img.copy()
+    h_img, w_img = annotated.shape[:2]
+    # High-visibility Tactical Amber / Yellow for Reference Card (BGR: (0, 215, 255))
+    yellow_bgr = (0, 215, 255)
+    # High-visibility Emerald Green for Reaction Vial (BGR: (70, 230, 70))
+    green_bgr = (70, 230, 70)
+    
+    # 1. Overlay Reference Card Box (Yellow Dashed)
+    if ref_roi and len(ref_roi) == 4:
+        rx, ry, rw, rh = ref_roi
+        rx = max(0, min(rx, w_img - 10))
+        ry = max(0, min(ry, h_img - 10))
+        rw = max(10, min(rw, w_img - rx))
+        rh = max(10, min(rh, h_img - ry))
+        
+        # Subtle tint overlay (12% amber)
+        overlay = annotated.copy()
+        cv2.rectangle(overlay, (rx, ry), (rx + rw, ry + rh), yellow_bgr, -1)
+        cv2.addWeighted(overlay, 0.12, annotated, 0.88, 0, annotated)
+        
+        # Dashed perimeter
+        draw_dashed_line(annotated, (rx, ry), (rx + rw, ry), yellow_bgr, 2)
+        draw_dashed_line(annotated, (rx + rw, ry), (rx + rw, ry + rh), yellow_bgr, 2)
+        draw_dashed_line(annotated, (rx + rw, ry + rh), (rx, ry + rh), yellow_bgr, 2)
+        draw_dashed_line(annotated, (rx, ry + rh), (rx, ry), yellow_bgr, 2)
+        
+        # Reinforced solid corners
+        draw_corner_brackets(annotated, rx, ry, rw, rh, yellow_bgr, bracket_len=18, thickness=3)
+        
+        # Labeled Tactical Badge
+        label = "REF COLOR CARD"
+        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)
+        badge_y = max(ry - 8, th + 8)
+        cv2.rectangle(annotated, (rx, badge_y - th - 6), (rx + tw + 14, badge_y + 4), (15, 23, 42), -1)
+        cv2.rectangle(annotated, (rx, badge_y - th - 6), (rx + tw + 14, badge_y + 4), yellow_bgr, 1)
+        cv2.putText(annotated, label, (rx + 7, badge_y - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.42, yellow_bgr, 1, cv2.LINE_AA)
+        
+    # 2. Overlay Reaction Vial Box (Green Dashed)
+    if vial_roi and len(vial_roi) == 4:
+        vx, vy, vw, vh = vial_roi
+        vx = max(0, min(vx, w_img - 10))
+        vy = max(0, min(vy, h_img - 10))
+        vw = max(10, min(vw, w_img - vx))
+        vh = max(10, min(vh, h_img - vy))
+        
+        # Subtle tint overlay (12% emerald)
+        overlay = annotated.copy()
+        cv2.rectangle(overlay, (vx, vy), (vx + vw, vy + vh), green_bgr, -1)
+        cv2.addWeighted(overlay, 0.12, annotated, 0.88, 0, annotated)
+        
+        # Dashed perimeter
+        draw_dashed_line(annotated, (vx, vy), (vx + vw, vy), green_bgr, 2)
+        draw_dashed_line(annotated, (vx + vw, vy), (vx + vw, vy + vh), green_bgr, 2)
+        draw_dashed_line(annotated, (vx + vw, vy + vh), (vx, vy + vh), green_bgr, 2)
+        draw_dashed_line(annotated, (vx, vy + vh), (vx, vy), green_bgr, 2)
+        
+        # Reinforced solid corners
+        draw_corner_brackets(annotated, vx, vy, vw, vh, green_bgr, bracket_len=18, thickness=3)
+        
+        # Labeled Tactical Badge
+        label = "TEST VIAL / WELL"
+        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.42, 1)
+        badge_y = max(vy - 8, th + 8)
+        cv2.rectangle(annotated, (vx, badge_y - th - 6), (vx + tw + 14, badge_y + 4), (15, 23, 42), -1)
+        cv2.rectangle(annotated, (vx, badge_y - th - 6), (vx + tw + 14, badge_y + 4), green_bgr, 1)
+        cv2.putText(annotated, label, (vx + 7, badge_y - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.42, green_bgr, 1, cv2.LINE_AA)
+        
+    # Center crosshair reticle
+    cx, cy = w_img // 2, h_img // 2
+    cv2.line(annotated, (cx - 15, cy), (cx + 15, cy), (148, 163, 184), 1, cv2.LINE_AA)
+    cv2.line(annotated, (cx, cy - 15), (cx, cy + 15), (148, 163, 184), 1, cv2.LINE_AA)
+    cv2.circle(annotated, (cx, cy), 8, (148, 163, 184), 1, cv2.LINE_AA)
+    
+    return annotated
+
+
 # Page Configuration
 st.set_page_config(
     page_title="NARCO-SCAN FIELD | Presumptive Drug Testing",
@@ -151,10 +262,10 @@ if raw_image_bytes:
         st.divider()
 
         # Target ROI Controls
-        with st.expander("🎯 Target Alignment Bounding Boxes (Optional Adjustment)", expanded=False):
+        with st.expander("🎯 Target Alignment Bounding Boxes (Fine-Tune Coordinates)", expanded=False):
             col_r1, col_r2 = st.columns(2)
             with col_r1:
-                st.caption("Reference Color Card [X, Y, Width, Height]")
+                st.caption("🟨 Reference Color Card [X, Y, Width, Height]")
                 rx = st.slider("Card X", 0, cv_img.shape[1], ref_roi_override[0] if ref_roi_override else 60)
                 ry = st.slider("Card Y", 0, cv_img.shape[0], ref_roi_override[1] if ref_roi_override else 150)
                 rw = st.slider("Card Width", 20, 350, ref_roi_override[2] if ref_roi_override else 220)
@@ -162,12 +273,57 @@ if raw_image_bytes:
                 ref_roi_override = [rx, ry, rw, rh]
                 
             with col_r2:
-                st.caption("Reaction Vial / Well [X, Y, Width, Height]")
+                st.caption("🟩 Reaction Vial / Well [X, Y, Width, Height]")
                 vx = st.slider("Vial X", 0, cv_img.shape[1], vial_roi_override[0] if vial_roi_override else 400)
                 vy = st.slider("Vial Y", 0, cv_img.shape[0], vial_roi_override[1] if vial_roi_override else 185)
                 vw = st.slider("Vial Width", 20, 250, vial_roi_override[2] if vial_roi_override else 120)
                 vh = st.slider("Vial Height", 20, 250, vial_roi_override[3] if vial_roi_override else 135)
                 vial_roi_override = [vx, vy, vw, vh]
+
+        # Draw Augmented Reality HUD with Yellow Card & Green Vial Dashed Boxes
+        hud_img = draw_tactical_alignment_hud(cv_img, ref_roi_override, vial_roi_override)
+
+        # Field Optical Viewfinder Section
+        st.markdown("### 📷 Field Optical Capture & AR Alignment Viewfinder")
+        show_ar = st.toggle(
+            "🎯 Display Yellow & Green AR Alignment Guides",
+            value=True,
+            help="Toggles the yellow dashed reference card box and green dashed reaction vial box overlay"
+        )
+        
+        col_vf1, col_vf2 = st.columns([3, 2])
+        with col_vf1:
+            preview_canvas = hud_img if show_ar else cv_img
+            st.image(
+                cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB),
+                caption="Field Optical Viewfinder — 🟨 Yellow Box: Reference Card | 🟩 Green Box: Test Vial",
+                use_container_width=True
+            )
+        with col_vf2:
+            st.markdown("##### 🔬 Sensor Target Isolations")
+            rx, ry, rw, rh = ref_roi_override
+            vx, vy, vw, vh = vial_roi_override
+            crop_card = cv_img[max(0, ry):min(cv_img.shape[0], ry+rh), max(0, rx):min(cv_img.shape[1], rx+rw)]
+            crop_vial_raw = cv_img[max(0, vy):min(cv_img.shape[0], vy+vh), max(0, vx):min(cv_img.shape[1], vx+vw)]
+            
+            c_c1, c_c2 = st.columns(2)
+            with c_c1:
+                st.caption("🟨 Ref Card Target")
+                if crop_card.size > 0:
+                    st.image(cv2.cvtColor(crop_card, cv2.COLOR_BGR2RGB), use_container_width=True)
+            with c_c2:
+                st.caption("🟩 Reaction Vial Target")
+                if crop_vial_raw.size > 0:
+                    st.image(cv2.cvtColor(crop_vial_raw, cv2.COLOR_BGR2RGB), use_container_width=True)
+                    
+            st.markdown("""
+            <div style="background-color: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #1e293b; font-size: 13px; line-height: 1.5;">
+                <div style="color: #fbbf24; font-weight: bold; margin-bottom: 4px;">🟨 Yellow Dashed Box:</div>
+                <div style="color: #94a3b8; margin-bottom: 8px;">Target for 8-patch forensic reference card standard. Calibrates lighting & shadows.</div>
+                <div style="color: #34d399; font-weight: bold; margin-bottom: 4px;">🟩 Green Dashed Box:</div>
+                <div style="color: #94a3b8;">Target for test reaction vial / spot plate well. Isolates liquid chromophore.</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         # Step 1: Run OpenCV Color Correction Pipeline
         corrected_img, vial_crop, calib_metrics = run_full_color_calibration(
@@ -274,11 +430,30 @@ if raw_image_bytes:
             st.subheader("OpenCV Illumination Compensation & Reference Card Normalization")
             col_img1, col_img2 = st.columns(2)
             with col_img1:
-                st.markdown("**1. Raw Captured Field Photo**")
-                st.image(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB), use_container_width=True)
+                st.markdown("**1. Raw Field Capture with AR Alignment Reticles**")
+                st.image(
+                    cv2.cvtColor(hud_img, cv2.COLOR_BGR2RGB),
+                    caption="🟨 Yellow Box: Reference Card Standard | 🟩 Green Box: Test Reaction Vial",
+                    use_container_width=True
+                )
             with col_img2:
-                st.markdown("**2. OpenCV Calibrated Image (Normalized D65)**")
-                st.image(cv2.cvtColor(corrected_img, cv2.COLOR_BGR2RGB), use_container_width=True)
+                st.markdown("**2. OpenCV Calibrated Image (Normalized D65 Retinex)**")
+                st.image(
+                    cv2.cvtColor(corrected_img, cv2.COLOR_BGR2RGB),
+                    caption="Ambient illumination compensated via 3x3 polynomial color constancy",
+                    use_container_width=True
+                )
+
+            st.markdown("##### 🔬 Reaction Vial Chromophore: Raw vs. Normalized")
+            col_v_raw, col_v_cal = st.columns(2)
+            with col_v_raw:
+                st.caption("Raw Captured Reaction Vial (Uncalibrated)")
+                if crop_vial_raw.size > 0:
+                    st.image(cv2.cvtColor(crop_vial_raw, cv2.COLOR_BGR2RGB), use_container_width=True)
+            with col_v_cal:
+                st.caption("OpenCV Calibrated Reaction Vial (Standard D65)")
+                if vial_crop.size > 0:
+                    st.image(cv2.cvtColor(vial_crop, cv2.COLOR_BGR2RGB), use_container_width=True)
 
             st.markdown("##### 📐 Optical Telemetry")
             col_opt1, col_opt2, col_opt3 = st.columns(3)
